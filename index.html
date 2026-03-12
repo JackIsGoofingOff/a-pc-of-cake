@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PC Assembly Simulator</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'hand': ['"Patrick Hand"', 'cursive'] },
+                    colors: { 'brand-blue': '#4A90E2', 'brand-yellow': '#F5A623', 'brand-glow': '#00e5ff' }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { margin: 0; overflow: hidden; touch-action: none; background-color: #1f2937; user-select: none; -webkit-user-select: none; }
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        .pointer-events-auto { pointer-events: auto; }
+        .confetti { position: absolute; width: 10px; height: 10px; z-index: 50; border-radius: 2px; }
+        .part-label {
+            position: absolute; transform: translate(-50%, -50%); z-index: 5;
+            pointer-events: none; transition: opacity 0.3s;
+        }
+    </style>
+</head>
+<body class="font-hand text-white">
+
+    <div id="canvas-container"></div>
+
+    <div id="labels-container">
+        <div id="label-Mobo" class="part-label px-3 py-1 bg-gray-800/80 text-white border-2 border-brand-blue rounded-lg opacity-0">Motherboard</div>
+        <div id="label-CPU" class="part-label px-3 py-1 bg-gray-800/80 text-white border-2 border-brand-blue rounded-lg opacity-0">CPU</div>
+        <div id="label-RAM" class="part-label px-3 py-1 bg-gray-800/80 text-white border-2 border-brand-blue rounded-lg opacity-0">RAM</div>
+        <div id="label-SSD" class="part-label px-3 py-1 bg-gray-800/80 text-white border-2 border-brand-blue rounded-lg opacity-0">SSD</div>
+    </div>
+
+    <div id="ui-layer" class="flex flex-col p-4 md:p-8">
+        <header class="flex justify-between items-center w-full">
+            <h1 id="title" class="text-3xl md:text-5xl font-bold drop-shadow-lg text-brand-yellow">Build-a-PC!</h1>
+            <div id="score-container" class="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl text-xl md:text-3xl border-2 border-white/50 text-center pointer-events-auto">
+                Parts Placed: <span id="score-text" class="text-brand-yellow font-bold">0/3</span>
+            </div>
+        </header>
+
+        <div id="instructions" class="text-center mt-4 text-xl text-white/80 drop-shadow-md">
+            Drag parts to red sockets. <br><span class="text-brand-yellow">Hold a part to learn about it!</span>
+        </div>
+
+        <div id="info-modal" class="absolute inset-0 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 hidden pointer-events-auto" style="z-index: 100;">
+            <div class="bg-gray-800 border-4 border-brand-blue rounded-3xl p-6 md:p-10 max-w-sm w-[90%] text-center shadow-2xl relative transform scale-90" id="info-box">
+                <button onclick="closeModal()" class="absolute -top-4 -right-4 bg-red-500 hover:bg-red-400 text-white w-10 h-10 rounded-full text-2xl font-bold border-2 border-white shadow-lg transition-transform active:scale-90">X</button>
+                
+                <div id="info-icon" class="w-32 h-32 mx-auto mb-4 flex items-center justify-center"></div>
+                
+                <h2 id="info-title" class="text-4xl text-brand-yellow font-bold mb-2">Part Name</h2>
+                <p id="info-desc" class="text-xl text-white/90 leading-relaxed">Description goes here.</p>
+            </div>
+        </div>
+
+        <div id="win-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm opacity-0 hidden pointer-events-auto" style="z-index: 100;">
+            <h2 class="text-6xl md:text-8xl text-brand-yellow font-bold drop-shadow-xl mb-6 scale-0" id="win-title">PC Assembled!</h2>
+            <button onclick="location.reload()" class="bg-brand-blue hover:bg-blue-400 text-white text-2xl px-8 py-4 rounded-full shadow-[0_8px_0_#2563eb] active:shadow-[0_0px_0_#2563eb] active:translate-y-2 transition-all">
+                Build Another!
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // ==========================================
+        // 1. CONTENT DATA (Descriptions & Local Images)
+        // ==========================================
+        const componentData = {
+            'CPU': {
+                name: 'CPU',
+                desc: 'The Brain! It does all the thinking and calculations for the computer.',
+                imgHTML: `<img src="images/cpu.png" alt="CPU" class="w-full h-full object-contain drop-shadow-lg">`
+            },
+            'RAM': {
+                name: 'RAM',
+                desc: 'The Short-Term Memory! It holds data the CPU needs right this second.',
+                imgHTML: `<img src="images/ram.png" alt="RAM" class="w-full h-full object-contain drop-shadow-lg">`
+            },
+            'SSD': {
+                name: 'SSD',
+                desc: 'The Backpack! It stores all your games and files permanently, even when turned off.',
+                imgHTML: `<img src="images/ssd.png" alt="SSD" class="w-full h-full object-contain drop-shadow-lg">`
+            },
+            'Mobo': {
+                name: 'Motherboard',
+                desc: 'The City Grid! It physically connects everything together so parts can talk to each other.',
+                imgHTML: `<img src="images/motherboard.png" alt="Motherboard" class="w-full h-full object-contain drop-shadow-lg">`
+            }
+        };
+
+        // ==========================================
+        // 2. GAME STATE & UI ANIMATIONS
+        // ==========================================
+        let score = 0;
+        const totalParts = 3;
+        
+        gsap.from("#title", { y: -50, opacity: 0, duration: 1, ease: "elastic.out(1, 0.4)", delay: 0.2 });
+        gsap.from("#score-container", { scale: 0, opacity: 0, duration: 1, ease: "back.out(1.5)", delay: 0.4 });
+        gsap.from("#instructions", { opacity: 0, y: 20, duration: 1, delay: 0.8 });
+
+        function updateScore() {
+            score++;
+            document.getElementById('score-text').innerText = `${score}/${totalParts}`;
+            gsap.fromTo("#score-container", 
+                { scale: 1.3, backgroundColor: "rgba(245, 166, 35, 0.4)" },
+                { scale: 1, backgroundColor: "rgba(255, 255, 255, 0.2)", duration: 0.5, ease: "elastic.out(1, 0.3)" }
+            );
+            if (score === totalParts) triggerWinState();
+        }
+
+        const modal = document.getElementById('info-modal');
+        const infoBox = document.getElementById('info-box');
+        
+        function openModal(id) {
+            const data = componentData[id];
+            if(!data) return;
+
+            document.getElementById('info-icon').innerHTML = data.imgHTML;
+            document.getElementById('info-title').innerText = data.name;
+            document.getElementById('info-desc').innerText = data.desc;
+
+            modal.style.display = "flex";
+            gsap.to(modal, { opacity: 1, duration: 0.3 });
+            gsap.to(infoBox, { scale: 1, duration: 0.5, ease: "back.out(1.5)" });
+        }
+
+        function closeModal() {
+            gsap.to(infoBox, { scale: 0.9, duration: 0.2 });
+            gsap.to(modal, { opacity: 0, duration: 0.2, onComplete: () => modal.style.display = "none" });
+        }
+
+        function triggerWinState() {
+            gsap.to("#instructions", { opacity: 0, duration: 0.5 });
+            const winScreen = document.getElementById('win-screen');
+            winScreen.style.display = "flex";
+            gsap.to(winScreen, { opacity: 1, duration: 0.5, delay: 0.5 });
+            gsap.to("#win-title", { scale: 1, rotation: 360, duration: 1, ease: "elastic.out(1, 0.4)", delay: 0.8 });
+            
+            gsap.to(boardGroup.rotation, { y: Math.PI * 2, duration: 4, ease: "power2.inOut", delay: 0.5, repeat: -1, yoyo: true });
+            gsap.to(boardGroup.position, { y: 1, duration: 2, ease: "power2.out", delay: 0.5 });
+            document.querySelectorAll('.part-label').forEach(el => el.style.opacity = '0');
+        }
+
+        // ==========================================
+        // 3. THREE.JS & 3D WORLD
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 12, 10);
+        camera.lookAt(0, 0, -2);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        const boardGroup = new THREE.Group();
+        boardGroup.position.set(0, 0, -3);
+        scene.add(boardGroup);
+
+        // --- ENHANCED MOTHERBOARD VISUALS ---
+        // 1. Base board (Steel blue matching reference)
+        const boardGeo = new THREE.BoxGeometry(10, 0.4, 10);
+        const boardMat = new THREE.MeshStandardMaterial({ color: '#5b7c99', roughness: 0.8 }); 
+        const motherboard = new THREE.Mesh(boardGeo, boardMat);
+        motherboard.userData = { id: 'Mobo' };
+        boardGroup.add(motherboard);
+
+        // 2. Decorator Materials
+        const matSilver = new THREE.MeshStandardMaterial({ color: '#bdc3c7', metalness: 0.7, roughness: 0.3 });
+        const matDark = new THREE.MeshStandardMaterial({ color: '#2c3e50', roughness: 0.9 });
+        const matWhite = new THREE.MeshStandardMaterial({ color: '#ecf0f1', roughness: 0.8 });
+        const matGold = new THREE.MeshStandardMaterial({ color: '#e5b158', metalness: 0.5, roughness: 0.5 }); 
+
+        // 3. Back Panel I/O Ports (Left edge)
+        const io1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 2.5), matSilver);
+        io1.position.set(-4.5, 0.6, -3);
+        boardGroup.add(io1);
+        
+        const io2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.5), matWhite);
+        io2.position.set(-4.5, 0.6, -0.5);
+        boardGroup.add(io2);
+
+        const io3 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.5), matDark);
+        io3.position.set(-4.5, 0.6, 1.5);
+        boardGroup.add(io3);
+
+        // 4. Heatsink/Fan combo (Gold box from reference)
+        const heatsink = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.8, 2.5), matGold);
+        heatsink.position.set(1, 0.6, 2.5);
+        boardGroup.add(heatsink);
+        
+        // Add fan blades implication (Dark circle on top of gold box)
+        const fan = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.05, 16), matDark);
+        fan.position.set(1, 1.05, 2.5);
+        boardGroup.add(fan);
+
+        // 5. Secondary Controller Chips
+        const chip1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.15, 1.5), matDark);
+        chip1.position.set(3, 0.275, 2.5);
+        boardGroup.add(chip1);
+
+        const chip2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.15, 0.8), matDark);
+        chip2.position.set(-2, 0.275, -3.5);
+        boardGroup.add(chip2);
+
+        // 6. Empty Slots (White strips mimicking extra RAM/PCIe)
+        for(let i=0; i<3; i++) {
+            const pci = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 3), matWhite);
+            pci.position.set(3 + i*0.7, 0.4, -3);
+            boardGroup.add(pci);
+        }
+
+        // 7. Capacitors (Little silver cylinders scattered around)
+        const capGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.35, 8);
+        const capPositions = [
+            [-3.5, -2], [-3.5, -1.5], [-3.5, -1], // Next to CPU
+            [-0.5, -2.5], [0, -2.5], [0.5, -2.5], // Top edge
+            [1, -1.5], [1, -1], [1, -0.5], // Next to RAM
+            [-1, 1.5], [-0.5, 1.5], // Center
+            [3, 0.5], [3.5, 0.5], [4, 0.5], // Right edge
+            [-3, 4], [-2.5, 4], [-2, 4] // Bottom edge near IO
+        ];
+        capPositions.forEach(pos => {
+            const cap = new THREE.Mesh(capGeo, matSilver);
+            cap.position.set(pos[0], 0.375, pos[1]);
+            boardGroup.add(cap);
+        });
+
+        // --- INTERACTIVE SOCKETS ---
+        const socketMat = new THREE.MeshStandardMaterial({ color: '#e74c3c', wireframe: true });
+        
+        const cpuSocket = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 2), socketMat);
+        cpuSocket.position.set(-2, 0, -1);
+        boardGroup.add(cpuSocket);
+
+        const ramSocket = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 4), socketMat);
+        ramSocket.position.set(2, 0, -1);
+        boardGroup.add(ramSocket);
+
+        const ssdSocket = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 1), socketMat);
+        ssdSocket.position.set(-2, 0, 2);
+        boardGroup.add(ssdSocket);
+
+        // --- DATA FLOW LINES ---
+        const flowMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0 });
+        const bus1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.05, 0.2), flowMat);
+        bus1.position.set(0, 0.21, -1);
+        boardGroup.add(bus1);
+
+        const bus2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 2), flowMat);
+        bus2.position.set(-2, 0.21, 0.5);
+        boardGroup.add(bus2);
+
+        // --- TRAY COMPONENTS ---
+        const parts = [];
+        const interactables = [];
+
+        const cpu = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.4, 1.8), new THREE.MeshStandardMaterial({ color: '#bdc3c7', metalness: 0.8 }));
+        cpu.position.set(-3, 0.2, 4);
+        cpu.userData = { id: 'CPU', startPos: cpu.position.clone(), isSnapped: false };
+        parts.push(cpu); scene.add(cpu);
+
+        const ram = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 3.8), new THREE.MeshStandardMaterial({ color: '#27ae60' }));
+        ram.position.set(0, 0.2, 4);
+        ram.userData = { id: 'RAM', startPos: ram.position.clone(), isSnapped: false };
+        parts.push(ram); scene.add(ram);
+
+        const ssd = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.4, 0.8), new THREE.MeshStandardMaterial({ color: '#34495e' }));
+        ssd.position.set(3, 0.2, 4);
+        ssd.userData = { id: 'SSD', startPos: ssd.position.clone(), isSnapped: false };
+        parts.push(ssd); scene.add(ssd);
+
+        interactables.push(...parts, motherboard);
+
+        // ==========================================
+        // 4. DRAG & DROP + LONG PRESS LOGIC
+        // ==========================================
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let draggedObject = null;
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.5); 
+        const planeIntersect = new THREE.Vector3();
+
+        let holdTimer = null;
+        let isHolding = false;
+        const holdDuration = 400; 
+
+        function onPointerDown(event) {
+            if (modal.style.display === "flex") return; 
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(interactables);
+
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                isHolding = false;
+
+                holdTimer = setTimeout(() => {
+                    isHolding = true;
+                    draggedObject = null; 
+                    document.body.style.cursor = 'default';
+                    openModal(obj.userData.id);
+                    if (navigator.vibrate) navigator.vibrate(50);
+                }, holdDuration);
+
+                if (obj.userData.id !== 'Mobo' && !obj.userData.isSnapped) {
+                    draggedObject = obj;
+                    gsap.to(draggedObject.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.2, ease: "back.out(2)" });
+                    document.body.style.cursor = 'grabbing';
+                }
+            }
+        }
+
+        function onPointerMove(event) {
+            if (holdTimer) clearTimeout(holdTimer);
+            if (isHolding || !draggedObject) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            raycaster.ray.intersectPlane(dragPlane, planeIntersect);
+            draggedObject.position.copy(planeIntersect);
+        }
+
+        function onPointerUp() {
+            clearTimeout(holdTimer);
+            if (isHolding) { isHolding = false; return; }
+            if (!draggedObject) return;
+            document.body.style.cursor = 'default';
+
+            let targetSocket;
+            if (draggedObject.userData.id === 'CPU') targetSocket = cpuSocket;
+            if (draggedObject.userData.id === 'RAM') targetSocket = ramSocket;
+            if (draggedObject.userData.id === 'SSD') targetSocket = ssdSocket;
+
+            const socketWorldPos = new THREE.Vector3();
+            targetSocket.getWorldPosition(socketWorldPos);
+
+            const distance = draggedObject.position.distanceTo(socketWorldPos);
+            
+            if (distance < 1.5) {
+                draggedObject.userData.isSnapped = true;
+                boardGroup.attach(draggedObject);
+                
+                gsap.to(draggedObject.position, {
+                    x: targetSocket.position.x, y: targetSocket.position.y + 0.1, z: targetSocket.position.z,
+                    duration: 0.3, ease: "power2.out"
+                });
+                gsap.to(draggedObject.scale, { x: 1, y: 1, z: 1, duration: 0.3 });
+                gsap.fromTo(draggedObject.position, { y: targetSocket.position.y + 1 }, { y: targetSocket.position.y + 0.1, duration: 0.5, ease: "bounce.out", delay: 0.1 });
+                updateScore();
+            } else {
+                gsap.to(draggedObject.position, {
+                    x: draggedObject.userData.startPos.x, y: draggedObject.userData.startPos.y, z: draggedObject.userData.startPos.z,
+                    duration: 0.5, ease: "back.out(1.5)"
+                });
+                gsap.to(draggedObject.scale, { x: 1, y: 1, z: 1, duration: 0.3 });
+            }
+            draggedObject = null;
+        }
+
+        window.addEventListener('pointerdown', onPointerDown);
+        window.addEventListener('pointermove', onPointerMove);
+        window.addEventListener('pointerup', onPointerUp);
+
+        // ==========================================
+        // 5. LABEL TRACKING & RENDER LOOP
+        // ==========================================
+        
+        function updateSingleLabel(obj3D, labelId) {
+            const labelEl = document.getElementById(`label-${labelId}`);
+            if(!labelEl) return;
+
+            const vector = new THREE.Vector3();
+            obj3D.getWorldPosition(vector);
+            
+            vector.y += 0.8; 
+            vector.project(camera);
+
+            const x = (vector.x * .5 + .5) * window.innerWidth;
+            const y = (vector.y * -.5 + .5) * window.innerHeight;
+
+            labelEl.style.left = `${x}px`;
+            labelEl.style.top = `${y}px`;
+
+            if (score < totalParts) {
+                labelEl.style.opacity = "1";
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateSingleLabel(motherboard, 'Mobo');
+            parts.forEach(part => updateSingleLabel(part, part.userData.id));
+
+            const time = Date.now() * 0.003;
+            if(cpu.userData.isSnapped) {
+                flowMat.opacity = (Math.sin(time) + 1) * 0.3 + 0.2;
+            }
+
+            parts.forEach((part, index) => {
+                if(!part.userData.isSnapped && part !== draggedObject) {
+                    part.position.y = part.userData.startPos.y + Math.sin(time + index) * 0.05;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
