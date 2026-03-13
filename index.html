@@ -19,17 +19,52 @@
     </script>
     <style>
         body { margin: 0; overflow: hidden; touch-action: none; background-color: #1f2937; user-select: none; -webkit-user-select: none; }
+        
+        /* Layer Z-Indexing to ensure nothing disappears */
+        #bg-layer { position: absolute; inset: 0; z-index: 0; background-color: #1f2937; background-size: cover; background-position: center; transition: background-image 0.5s ease; }
         #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        #labels-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; transition: opacity 0.8s ease; }
+        
         .pointer-events-auto { pointer-events: auto; }
-        .confetti { position: absolute; width: 10px; height: 10px; z-index: 50; border-radius: 2px; }
+        
         .part-label {
-            position: absolute; transform: translate(-50%, -50%); z-index: 5;
+            position: absolute; transform: translate(-50%, -50%); 
             pointer-events: none; transition: opacity 0.3s;
         }
+        
+        /* Scene Selector Buttons */
+        .bg-btn { 
+            background-size: cover; background-position: center; 
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; 
+        }
+        .bg-btn:hover { box-shadow: 0 0 20px rgba(74, 144, 226, 1); border-color: #4A90E2; z-index: 20; }
+        
+        /* Loading Animation */
+        .lego-loader {
+            position: relative; width: 60px; height: 30px; background-color: #e74c3c;
+            border-radius: 2px; box-shadow: inset -2px -2px 0 rgba(0,0,0,0.2);
+            animation: bounce 1s infinite alternate cubic-bezier(0.5, 0.05, 1, 0.5);
+        }
+        .lego-loader::before, .lego-loader::after {
+            content: ''; position: absolute; top: -8px; width: 16px; height: 8px;
+            background-color: #e74c3c; border-radius: 2px 2px 0 0;
+            box-shadow: inset -2px 0 0 rgba(0,0,0,0.2);
+        }
+        .lego-loader::before { left: 8px; }
+        .lego-loader::after { right: 8px; }
+        @keyframes bounce { 0% { transform: translateY(0); } 100% { transform: translateY(-30px); } }
     </style>
 </head>
 <body class="font-hand text-white">
+
+    <div id="loading-screen" class="fixed inset-0 bg-gray-900 z-[9999] flex flex-col justify-center items-center pointer-events-auto transition-opacity duration-500">
+        <div class="lego-loader mb-8"></div>
+        <h2 class="text-4xl text-brand-yellow font-bold tracking-widest animate-pulse">BUILDING...</h2>
+        <p id="load-progress" class="mt-4 text-xl text-white/70">0%</p>
+    </div>
+
+    <div id="bg-layer"></div>
 
     <div id="canvas-container"></div>
 
@@ -40,24 +75,32 @@
         <div id="label-SSD" class="part-label px-3 py-1 bg-gray-800/80 text-white border-2 border-brand-blue rounded-lg opacity-0">SSD</div>
     </div>
 
-    <div id="ui-layer" class="flex flex-col p-4 md:p-8">
+    <div id="ui-layer" class="flex flex-col p-4 md:p-8 opacity-0">
+        
         <header class="flex justify-between items-center w-full">
-            <h1 id="title" class="text-3xl md:text-5xl font-bold drop-shadow-lg text-brand-yellow">Build-a-PC!</h1>
-            <div id="score-container" class="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl text-xl md:text-3xl border-2 border-white/50 text-center pointer-events-auto">
+            <h1 id="title" class="text-4xl md:text-6xl font-bold drop-shadow-lg text-brand-yellow">Build-a-PC!</h1>
+            <div id="score-container" class="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl text-xl md:text-3xl border-2 border-white/50 text-center pointer-events-auto shadow-lg">
                 Parts Placed: <span id="score-text" class="text-brand-yellow font-bold">0/3</span>
             </div>
         </header>
 
-        <div id="instructions" class="text-center mt-4 text-xl text-white/80 drop-shadow-md">
-            Drag parts to red sockets. <br><span class="text-brand-yellow">Hold a part to learn about it!</span>
+        <div id="instructions" class="text-center mt-4 text-xl md:text-2xl text-white/90 drop-shadow-md">
+            Drag parts to red zones. <br><span class="text-brand-yellow">Hold a part to learn about it!</span>
+        </div>
+
+        <div class="absolute left-4 top-1/2" style="transform: translateY(-50%); z-index: 50;">
+            <div id="bg-selector" class="flex flex-col gap-4 pointer-events-auto opacity-0">
+                <button class="bg-btn w-16 h-16 md:w-20 md:h-20 bg-gray-800 border-4 border-gray-600 rounded-xl shadow-xl flex items-end justify-center pb-1 text-xs md:text-sm font-bold text-white drop-shadow-md" data-bg="default" style="background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.7)); background-color: #1f2937;" title="Default">Default</button>
+                <button class="bg-btn w-16 h-16 md:w-20 md:h-20 bg-gray-800 border-4 border-gray-600 rounded-xl shadow-xl flex items-end justify-center pb-1 text-xs md:text-sm font-bold text-white drop-shadow-md" data-bg="classroom" style="background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.7)), url('images/bg-classroom.jpg');" title="Classroom">Classroom</button>
+                <button class="bg-btn w-16 h-16 md:w-20 md:h-20 bg-gray-800 border-4 border-gray-600 rounded-xl shadow-xl flex items-end justify-center pb-1 text-xs md:text-sm font-bold text-white drop-shadow-md" data-bg="space" style="background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.7)), url('images/bg-space.jpg');" title="Space">Space</button>
+                <button class="bg-btn w-16 h-16 md:w-20 md:h-20 bg-gray-800 border-4 border-gray-600 rounded-xl shadow-xl flex items-end justify-center pb-1 text-xs md:text-sm font-bold text-white drop-shadow-md" data-bg="outdoor" style="background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.7)), url('images/bg-outdoor.jpg');" title="Outdoor">Outdoor</button>
+            </div>
         </div>
 
         <div id="info-modal" class="absolute inset-0 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm opacity-0 hidden pointer-events-auto" style="z-index: 100;">
             <div class="bg-gray-800 border-4 border-brand-blue rounded-3xl p-6 md:p-10 max-w-sm w-[90%] text-center shadow-2xl relative transform scale-90" id="info-box">
-                <button onclick="closeModal()" class="absolute -top-4 -right-4 bg-red-500 hover:bg-red-400 text-white w-10 h-10 rounded-full text-2xl font-bold border-2 border-white shadow-lg transition-transform active:scale-90">X</button>
-                
+                <button onclick="closeModal()" id="close-btn" class="absolute -top-4 -right-4 bg-red-500 text-white w-10 h-10 rounded-full text-2xl font-bold border-2 border-white shadow-lg">X</button>
                 <div id="info-icon" class="w-32 h-32 mx-auto mb-4 flex items-center justify-center"></div>
-                
                 <h2 id="info-title" class="text-4xl text-brand-yellow font-bold mb-2">Part Name</h2>
                 <p id="info-desc" class="text-xl text-white/90 leading-relaxed">Description goes here.</p>
             </div>
@@ -65,7 +108,7 @@
 
         <div id="win-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/80 backdrop-blur-sm opacity-0 hidden pointer-events-auto" style="z-index: 100;">
             <h2 class="text-6xl md:text-8xl text-brand-yellow font-bold drop-shadow-xl mb-6 scale-0" id="win-title">PC Assembled!</h2>
-            <button onclick="location.reload()" class="bg-brand-blue hover:bg-blue-400 text-white text-2xl px-8 py-4 rounded-full shadow-[0_8px_0_#2563eb] active:shadow-[0_0px_0_#2563eb] active:translate-y-2 transition-all">
+            <button onclick="location.reload()" id="restart-btn" class="bg-brand-blue text-white text-3xl px-10 py-5 rounded-full shadow-[0_8px_0_#2563eb]">
                 Build Another!
             </button>
         </div>
@@ -76,7 +119,49 @@
 
     <script>
         // ==========================================
-        // 1. CONTENT DATA (Descriptions & Local Images)
+        // 1. PRELOADER & UI INITIALIZATION
+        // ==========================================
+        const imagesToPreload = [
+            'images/cpu.png', 'images/ram.png', 'images/ssd.png', 'images/motherboard.png',
+            'images/bg-default.jpg', 'images/bg-classroom.jpg', 'images/bg-space.jpg', 'images/bg-outdoor.jpg'
+        ];
+        
+        let loadedImages = 0;
+        const totalImages = imagesToPreload.length;
+
+        function checkLoadProgress() {
+            loadedImages++;
+            document.getElementById('load-progress').innerText = `${Math.floor((loadedImages / totalImages) * 100)}%`;
+            if (loadedImages === totalImages) {
+                setTimeout(initSimulator, 500); 
+            }
+        }
+
+        imagesToPreload.forEach(src => {
+            const img = new Image();
+            img.onload = checkLoadProgress;
+            img.onerror = checkLoadProgress; 
+            img.src = src;
+        });
+
+        function initSimulator() {
+            const loader = document.getElementById('loading-screen');
+            gsap.to(loader, { opacity: 0, duration: 0.5, onComplete: () => loader.style.display = 'none' });
+
+            const uiLayer = document.getElementById('ui-layer');
+            uiLayer.classList.remove('opacity-0');
+
+            // GSAP Intro Animations
+            gsap.from("#title", { y: -50, opacity: 0, duration: 1, ease: "elastic.out(1, 0.4)", delay: 0.2 });
+            gsap.from("#score-container", { scale: 0, opacity: 0, duration: 1, ease: "back.out(1.5)", delay: 0.4 });
+            gsap.from("#instructions", { opacity: 0, y: 20, duration: 1, delay: 0.8 });
+            
+            // Fixed Background Selector Animation (Using fromTo prevents CSS clashes)
+            gsap.fromTo("#bg-selector", { opacity: 0, x: -50 }, { opacity: 1, x: 0, duration: 0.8, ease: "back.out(1)", delay: 0.5 });
+        }
+
+        // ==========================================
+        // 2. COMPONENT DATA
         // ==========================================
         const componentData = {
             'CPU': {
@@ -86,12 +171,12 @@
             },
             'RAM': {
                 name: 'RAM',
-                desc: 'The Short-Term Memory! It holds data the CPU needs right this second.',
+                desc: 'The Short-Term Memory! It is volatile which holds data only when the computer is on.',
                 imgHTML: `<img src="images/ram.png" alt="RAM" class="w-full h-full object-contain drop-shadow-lg">`
             },
             'SSD': {
                 name: 'SSD',
-                desc: 'The Backpack! It stores all your games and files permanently, even when turned off.',
+                desc: 'The Long-Term Memory! It stores all your games and files permanently, even when turned off.',
                 imgHTML: `<img src="images/ssd.png" alt="SSD" class="w-full h-full object-contain drop-shadow-lg">`
             },
             'Mobo': {
@@ -102,14 +187,44 @@
         };
 
         // ==========================================
-        // 2. GAME STATE & UI ANIMATIONS
+        // 3. GAME STATE & BACKGROUND SWITCHER
         // ==========================================
         let score = 0;
         const totalParts = 3;
-        
-        gsap.from("#title", { y: -50, opacity: 0, duration: 1, ease: "elastic.out(1, 0.4)", delay: 0.2 });
-        gsap.from("#score-container", { scale: 0, opacity: 0, duration: 1, ease: "back.out(1.5)", delay: 0.4 });
-        gsap.from("#instructions", { opacity: 0, y: 20, duration: 1, delay: 0.8 });
+
+        const bgStyles = {
+            'default': 'none',
+            'classroom': 'url(images/bg-classroom.jpg)',
+            'space': 'url(images/bg-space.jpg)',
+            'outdoor': 'url(images/bg-outdoor.jpg)'
+        };
+
+        function applySquish(element) {
+            element.addEventListener('mouseenter', () => gsap.to(element, { scale: 1.1, duration: 0.2, ease: "power1.out" }));
+            element.addEventListener('mouseleave', () => gsap.to(element, { scale: 1, duration: 0.2, ease: "power1.out" }));
+            element.addEventListener('mousedown', () => gsap.to(element, { scale: 0.9, duration: 0.1 }));
+            element.addEventListener('mouseup', () => gsap.to(element, { scale: 1.1, duration: 0.1 }));
+        }
+
+        document.querySelectorAll('.bg-btn').forEach(btn => {
+            applySquish(btn);
+            btn.addEventListener('click', (e) => {
+                const bgType = e.target.closest('button').dataset.bg;
+                const layer = document.getElementById('bg-layer');
+                
+                document.querySelectorAll('.bg-btn').forEach(b => gsap.to(b, { borderColor: '#4b5563' })); 
+                gsap.to(btn, { borderColor: '#4A90E2', duration: 0.3 }); 
+
+                gsap.to(layer, { opacity: 0, duration: 0.3, onComplete: () => {
+                    layer.style.backgroundImage = bgStyles[bgType];
+                    layer.style.backgroundColor = bgType === 'default' ? '#1f2937' : 'transparent';
+                    gsap.to(layer, { opacity: 1, duration: 0.5 });
+                }});
+            });
+        });
+
+        applySquish(document.getElementById('close-btn'));
+        applySquish(document.getElementById('restart-btn'));
 
         function updateScore() {
             score++;
@@ -120,42 +235,39 @@
             );
             if (score === totalParts) triggerWinState();
         }
-
+        
         const modal = document.getElementById('info-modal');
         const infoBox = document.getElementById('info-box');
         
         function openModal(id) {
             const data = componentData[id];
             if(!data) return;
-
             document.getElementById('info-icon').innerHTML = data.imgHTML;
             document.getElementById('info-title').innerText = data.name;
             document.getElementById('info-desc').innerText = data.desc;
-
             modal.style.display = "flex";
             gsap.to(modal, { opacity: 1, duration: 0.3 });
-            gsap.to(infoBox, { scale: 1, duration: 0.5, ease: "back.out(1.5)" });
+            gsap.to(infoBox, { scale: 1, rotation: 0, duration: 0.5, ease: "back.out(1.5)" });
         }
 
         function closeModal() {
-            gsap.to(infoBox, { scale: 0.9, duration: 0.2 });
-            gsap.to(modal, { opacity: 0, duration: 0.2, onComplete: () => modal.style.display = "none" });
+            gsap.to(infoBox, { scale: 0.5, rotation: -5, duration: 0.3, ease: "power2.in" });
+            gsap.to(modal, { opacity: 0, duration: 0.3, onComplete: () => modal.style.display = "none" });
         }
 
         function triggerWinState() {
-            gsap.to("#instructions", { opacity: 0, duration: 0.5 });
+            gsap.to("#instructions, #bg-selector", { opacity: 0, x: -20, duration: 0.5 });
             const winScreen = document.getElementById('win-screen');
             winScreen.style.display = "flex";
             gsap.to(winScreen, { opacity: 1, duration: 0.5, delay: 0.5 });
-            gsap.to("#win-title", { scale: 1, rotation: 360, duration: 1, ease: "elastic.out(1, 0.4)", delay: 0.8 });
-            
+            gsap.to("#win-title", { scale: 1, rotation: 360, duration: 1.2, ease: "elastic.out(1, 0.4)", delay: 0.8 });
             gsap.to(boardGroup.rotation, { y: Math.PI * 2, duration: 4, ease: "power2.inOut", delay: 0.5, repeat: -1, yoyo: true });
             gsap.to(boardGroup.position, { y: 1, duration: 2, ease: "power2.out", delay: 0.5 });
             document.querySelectorAll('.part-label').forEach(el => el.style.opacity = '0');
         }
 
         // ==========================================
-        // 3. THREE.JS & 3D WORLD
+        // 4. THREE.JS WORLD & DETAILED MOTHERBOARD
         // ==========================================
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
@@ -168,9 +280,9 @@
         renderer.shadowMap.enabled = true;
         container.appendChild(renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
         scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
         dirLight.position.set(5, 10, 5);
         scene.add(dirLight);
 
@@ -178,68 +290,50 @@
         boardGroup.position.set(0, 0, -3);
         scene.add(boardGroup);
 
-        // --- ENHANCED MOTHERBOARD VISUALS ---
-        // 1. Base board (Steel blue matching reference)
+        // Motherboard Base
         const boardGeo = new THREE.BoxGeometry(10, 0.4, 10);
         const boardMat = new THREE.MeshStandardMaterial({ color: '#5b7c99', roughness: 0.8 }); 
         const motherboard = new THREE.Mesh(boardGeo, boardMat);
         motherboard.userData = { id: 'Mobo' };
         boardGroup.add(motherboard);
 
-        // 2. Decorator Materials
         const matSilver = new THREE.MeshStandardMaterial({ color: '#bdc3c7', metalness: 0.7, roughness: 0.3 });
         const matDark = new THREE.MeshStandardMaterial({ color: '#2c3e50', roughness: 0.9 });
         const matWhite = new THREE.MeshStandardMaterial({ color: '#ecf0f1', roughness: 0.8 });
         const matGold = new THREE.MeshStandardMaterial({ color: '#e5b158', metalness: 0.5, roughness: 0.5 }); 
 
-        // 3. Back Panel I/O Ports (Left edge)
+        // I/O Ports
         const io1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 2.5), matSilver);
-        io1.position.set(-4.5, 0.6, -3);
-        boardGroup.add(io1);
-        
+        io1.position.set(-4.5, 0.6, -3); boardGroup.add(io1);
         const io2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.5), matWhite);
-        io2.position.set(-4.5, 0.6, -0.5);
-        boardGroup.add(io2);
-
+        io2.position.set(-4.5, 0.6, -0.5); boardGroup.add(io2);
         const io3 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 1.5), matDark);
-        io3.position.set(-4.5, 0.6, 1.5);
-        boardGroup.add(io3);
+        io3.position.set(-4.5, 0.6, 1.5); boardGroup.add(io3);
 
-        // 4. Heatsink/Fan combo (Gold box from reference)
+        // Heatsink and Fan
         const heatsink = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.8, 2.5), matGold);
-        heatsink.position.set(1, 0.6, 2.5);
-        boardGroup.add(heatsink);
-        
-        // Add fan blades implication (Dark circle on top of gold box)
+        heatsink.position.set(1, 0.6, 2.5); boardGroup.add(heatsink);
         const fan = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.05, 16), matDark);
-        fan.position.set(1, 1.05, 2.5);
-        boardGroup.add(fan);
+        fan.position.set(1, 1.05, 2.5); boardGroup.add(fan);
 
-        // 5. Secondary Controller Chips
+        // Controller Chips
         const chip1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.15, 1.5), matDark);
-        chip1.position.set(3, 0.275, 2.5);
-        boardGroup.add(chip1);
-
+        chip1.position.set(3, 0.275, 2.5); boardGroup.add(chip1);
         const chip2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.15, 0.8), matDark);
-        chip2.position.set(-2, 0.275, -3.5);
-        boardGroup.add(chip2);
+        chip2.position.set(-2, 0.275, -3.5); boardGroup.add(chip2);
 
-        // 6. Empty Slots (White strips mimicking extra RAM/PCIe)
+        // PCI Slots
         for(let i=0; i<3; i++) {
             const pci = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 3), matWhite);
-            pci.position.set(3 + i*0.7, 0.4, -3);
-            boardGroup.add(pci);
+            pci.position.set(3 + i*0.7, 0.4, -3); boardGroup.add(pci);
         }
 
-        // 7. Capacitors (Little silver cylinders scattered around)
+        // Scattered Capacitors
         const capGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.35, 8);
         const capPositions = [
-            [-3.5, -2], [-3.5, -1.5], [-3.5, -1], // Next to CPU
-            [-0.5, -2.5], [0, -2.5], [0.5, -2.5], // Top edge
-            [1, -1.5], [1, -1], [1, -0.5], // Next to RAM
-            [-1, 1.5], [-0.5, 1.5], // Center
-            [3, 0.5], [3.5, 0.5], [4, 0.5], // Right edge
-            [-3, 4], [-2.5, 4], [-2, 4] // Bottom edge near IO
+            [-3.5, -2], [-3.5, -1.5], [-3.5, -1], [-0.5, -2.5], [0, -2.5], [0.5, -2.5],
+            [1, -1.5], [1, -1], [1, -0.5], [-1, 1.5], [-0.5, 1.5], [3, 0.5], [3.5, 0.5], 
+            [4, 0.5], [-3, 4], [-2.5, 4], [-2, 4]
         ];
         capPositions.forEach(pos => {
             const cap = new THREE.Mesh(capGeo, matSilver);
@@ -247,58 +341,83 @@
             boardGroup.add(cap);
         });
 
-        // --- INTERACTIVE SOCKETS ---
+        // Sockets
         const socketMat = new THREE.MeshStandardMaterial({ color: '#e74c3c', wireframe: true });
-        
         const cpuSocket = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 2), socketMat);
-        cpuSocket.position.set(-2, 0, -1);
-        boardGroup.add(cpuSocket);
-
+        cpuSocket.position.set(-2, 0, -1); boardGroup.add(cpuSocket);
         const ramSocket = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 4), socketMat);
-        ramSocket.position.set(2, 0, -1);
-        boardGroup.add(ramSocket);
+        ramSocket.position.set(2, 0, -1); boardGroup.add(ramSocket);
+        const ssdSocket = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 1.5), socketMat);
+        ssdSocket.position.set(-2, 0, 2.5); boardGroup.add(ssdSocket);
 
-        const ssdSocket = new THREE.Mesh(new THREE.BoxGeometry(2, 0.5, 1), socketMat);
-        ssdSocket.position.set(-2, 0, 2);
-        boardGroup.add(ssdSocket);
-
-        // --- DATA FLOW LINES ---
+        // Data Flow Lines
         const flowMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0 });
         const bus1 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.05, 0.2), flowMat);
-        bus1.position.set(0, 0.21, -1);
-        boardGroup.add(bus1);
-
+        bus1.position.set(0, 0.21, -1); boardGroup.add(bus1);
         const bus2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 2), flowMat);
-        bus2.position.set(-2, 0.21, 0.5);
-        boardGroup.add(bus2);
-
-        // --- TRAY COMPONENTS ---
-        const parts = [];
-        const interactables = [];
-
-        const cpu = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.4, 1.8), new THREE.MeshStandardMaterial({ color: '#bdc3c7', metalness: 0.8 }));
-        cpu.position.set(-3, 0.2, 4);
-        cpu.userData = { id: 'CPU', startPos: cpu.position.clone(), isSnapped: false };
-        parts.push(cpu); scene.add(cpu);
-
-        const ram = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 3.8), new THREE.MeshStandardMaterial({ color: '#27ae60' }));
-        ram.position.set(0, 0.2, 4);
-        ram.userData = { id: 'RAM', startPos: ram.position.clone(), isSnapped: false };
-        parts.push(ram); scene.add(ram);
-
-        const ssd = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.4, 0.8), new THREE.MeshStandardMaterial({ color: '#34495e' }));
-        ssd.position.set(3, 0.2, 4);
-        ssd.userData = { id: 'SSD', startPos: ssd.position.clone(), isSnapped: false };
-        parts.push(ssd); scene.add(ssd);
-
-        interactables.push(...parts, motherboard);
+        bus2.position.set(-2, 0.21, 0.5); boardGroup.add(bus2);
 
         // ==========================================
-        // 4. DRAG & DROP + LONG PRESS LOGIC
+        // 5. LEGO-STYLE DRAGGABLE COMPONENTS
+        // ==========================================
+        const parts = [];
+        const interactables = []; 
+
+        // LEGO CPU
+        const cpuGroup = new THREE.Group();
+        cpuGroup.userData = { id: 'CPU', isSnapped: false };
+        const cpuBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.15, 1.8), new THREE.MeshStandardMaterial({ color: '#27ae60' })); 
+        const cpuMid = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.15, 1.6), matWhite); 
+        cpuMid.position.y = 0.15;
+        const cpuTop = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 1.1), matDark); 
+        cpuTop.position.y = 0.25;
+        cpuGroup.add(cpuBase, cpuMid, cpuTop);
+        cpuGroup.position.set(-3, 0.2, 4);
+        cpuGroup.userData.startPos = cpuGroup.position.clone();
+        parts.push(cpuGroup); scene.add(cpuGroup);
+
+        // LEGO RAM
+        const ramGroup = new THREE.Group();
+        ramGroup.userData = { id: 'RAM', isSnapped: false };
+        const ramBase = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 3.8), new THREE.MeshStandardMaterial({ color: '#111' }));
+        ramGroup.add(ramBase);
+        const ramColors = ['#f1c40f', '#3498db', '#e74c3c', '#f1c40f', '#3498db', '#2ecc71'];
+        for(let i=0; i<6; i++) {
+            const block = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.15, 0.5), new THREE.MeshStandardMaterial({ color: ramColors[i], roughness: 0.4 }));
+            block.position.set(0, 0.2, -1.5 + (i * 0.6));
+            ramGroup.add(block);
+        }
+        ramGroup.position.set(0, 0.2, 4);
+        ramGroup.userData.startPos = ramGroup.position.clone();
+        parts.push(ramGroup); scene.add(ramGroup);
+
+        // LEGO SSD
+        const ssdGroup = new THREE.Group();
+        ssdGroup.userData = { id: 'SSD', isSnapped: false };
+        const ssdBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.35, 1.5), matSilver); 
+        const ssdDetails = new THREE.Mesh(new THREE.BoxGeometry(1.82, 0.1, 1.52), new THREE.MeshStandardMaterial({ color: '#333' })); 
+        const ssdSticker = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.05, 0.4), matWhite); 
+        ssdSticker.position.set(0.3, 0.2, -0.3);
+        const ssdBump = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.4), matSilver); 
+        ssdBump.position.set(0.7, 0.2, -0.3);
+        ssdGroup.add(ssdBase, ssdDetails, ssdSticker, ssdBump);
+        ssdGroup.position.set(3, 0.2, 4);
+        ssdGroup.userData.startPos = ssdGroup.position.clone();
+        parts.push(ssdGroup); scene.add(ssdGroup);
+
+        // Raycaster Setup
+        interactables.push(motherboard);
+        [cpuGroup, ramGroup, ssdGroup].forEach(group => {
+            group.children.forEach(child => interactables.push(child));
+        });
+
+        // ==========================================
+        // 6. INTERACTION LOGIC (Drag, Hover, Snap)
         // ==========================================
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         let draggedObject = null;
+        let hoveredObject = null; 
         const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.5); 
         const planeIntersect = new THREE.Vector3();
 
@@ -306,29 +425,41 @@
         let isHolding = false;
         const holdDuration = 400; 
 
+        function getDraggableRoot(obj) {
+            let current = obj;
+            while(current) {
+                if (current.userData && current.userData.id) return current;
+                current = current.parent;
+            }
+            return null;
+        }
+
         function onPointerDown(event) {
             if (modal.style.display === "flex") return; 
+            if (event.target.closest('#bg-selector')) return; 
 
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(interactables);
+            const intersects = raycaster.intersectObjects(interactables, true);
 
             if (intersects.length > 0) {
-                const obj = intersects[0].object;
+                const rootObj = getDraggableRoot(intersects[0].object);
+                if (!rootObj) return;
+
                 isHolding = false;
 
                 holdTimer = setTimeout(() => {
                     isHolding = true;
                     draggedObject = null; 
                     document.body.style.cursor = 'default';
-                    openModal(obj.userData.id);
+                    openModal(rootObj.userData.id);
                     if (navigator.vibrate) navigator.vibrate(50);
                 }, holdDuration);
 
-                if (obj.userData.id !== 'Mobo' && !obj.userData.isSnapped) {
-                    draggedObject = obj;
+                if (rootObj.userData.id !== 'Mobo' && !rootObj.userData.isSnapped) {
+                    draggedObject = rootObj;
                     gsap.to(draggedObject.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.2, ease: "back.out(2)" });
                     document.body.style.cursor = 'grabbing';
                 }
@@ -336,12 +467,36 @@
         }
 
         function onPointerMove(event) {
-            if (holdTimer) clearTimeout(holdTimer);
-            if (isHolding || !draggedObject) return;
-
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
+
+            // Hover interactions
+            if (!draggedObject && modal.style.display !== "flex") {
+                const hoverIntersects = raycaster.intersectObjects(interactables, true);
+                if (hoverIntersects.length > 0) {
+                    const rootObj = getDraggableRoot(hoverIntersects[0].object);
+                    if (rootObj && hoveredObject !== rootObj) {
+                        if (hoveredObject && !hoveredObject.userData.isSnapped) gsap.to(hoveredObject.scale, {x: 1, y: 1, z: 1, duration: 0.2});
+                        hoveredObject = rootObj;
+                        if (!hoveredObject.userData.isSnapped && hoveredObject.userData.id !== 'Mobo') {
+                            document.body.style.cursor = 'pointer';
+                            gsap.to(hoveredObject.scale, {x: 1.08, y: 1.08, z: 1.08, duration: 0.2, ease: "power1.out"});
+                        }
+                    }
+                } else {
+                    if (hoveredObject) {
+                        if (!hoveredObject.userData.isSnapped) gsap.to(hoveredObject.scale, {x: 1, y: 1, z: 1, duration: 0.2});
+                        hoveredObject = null;
+                        document.body.style.cursor = 'default';
+                    }
+                }
+            }
+
+            // Drag mechanics
+            if (holdTimer) clearTimeout(holdTimer);
+            if (isHolding || !draggedObject) return;
+
             raycaster.ray.intersectPlane(dragPlane, planeIntersect);
             draggedObject.position.copy(planeIntersect);
         }
@@ -363,6 +518,7 @@
             const distance = draggedObject.position.distanceTo(socketWorldPos);
             
             if (distance < 1.5) {
+                // Successful Snap
                 draggedObject.userData.isSnapped = true;
                 boardGroup.attach(draggedObject);
                 
@@ -374,6 +530,7 @@
                 gsap.fromTo(draggedObject.position, { y: targetSocket.position.y + 1 }, { y: targetSocket.position.y + 0.1, duration: 0.5, ease: "bounce.out", delay: 0.1 });
                 updateScore();
             } else {
+                // Failed Snap
                 gsap.to(draggedObject.position, {
                     x: draggedObject.userData.startPos.x, y: draggedObject.userData.startPos.y, z: draggedObject.userData.startPos.z,
                     duration: 0.5, ease: "back.out(1.5)"
@@ -388,28 +545,20 @@
         window.addEventListener('pointerup', onPointerUp);
 
         // ==========================================
-        // 5. LABEL TRACKING & RENDER LOOP
+        // 7. RENDER LOOP
         // ==========================================
-        
         function updateSingleLabel(obj3D, labelId) {
             const labelEl = document.getElementById(`label-${labelId}`);
             if(!labelEl) return;
-
             const vector = new THREE.Vector3();
             obj3D.getWorldPosition(vector);
-            
             vector.y += 0.8; 
             vector.project(camera);
-
             const x = (vector.x * .5 + .5) * window.innerWidth;
             const y = (vector.y * -.5 + .5) * window.innerHeight;
-
             labelEl.style.left = `${x}px`;
             labelEl.style.top = `${y}px`;
-
-            if (score < totalParts) {
-                labelEl.style.opacity = "1";
-            }
+            if (score < totalParts) labelEl.style.opacity = "1";
         }
 
         function animate() {
@@ -419,12 +568,12 @@
             parts.forEach(part => updateSingleLabel(part, part.userData.id));
 
             const time = Date.now() * 0.003;
-            if(cpu.userData.isSnapped) {
+            if(cpuGroup.userData.isSnapped) {
                 flowMat.opacity = (Math.sin(time) + 1) * 0.3 + 0.2;
             }
 
             parts.forEach((part, index) => {
-                if(!part.userData.isSnapped && part !== draggedObject) {
+                if(!part.userData.isSnapped && part !== draggedObject && part !== hoveredObject) {
                     part.position.y = part.userData.startPos.y + Math.sin(time + index) * 0.05;
                 }
             });
